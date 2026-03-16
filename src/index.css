@@ -1,3 +1,4 @@
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -10,4 +11,29 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* 风控系统样式 */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #2222f6e9;
+  padding: 0 20px;
+}
+
+.logo {
+  color: #fff;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.site-layout-content {
+  background: #fff;
+  padding: 24px;
+  min-height: calc(100vh - 64px);
+}
+
+.card-margin {
+  margin-bottom: 16px;
 }
