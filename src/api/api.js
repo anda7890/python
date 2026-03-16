@@ -1,140 +1,179 @@
 import axios from 'axios';
-import { generateHistoryEvents, generatePolicies } from '../utils/mockDataGenerator';
+import {
+  generateHistoryEvents,
+  generatePolicies,
+  generateRealTimeScores,
+  generateRealtimeMetrics,
+  generateUserProfile,
+  validateEventEnvelope,
+} from '../utils/mockDataGenerator';
 
-// 开发环境使用模拟数据，生产环境替换为实际后端 URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+const REAL_DEMO_API_BASE_URL = process.env.REACT_APP_REAL_DEMO_API_URL || 'http://localhost:8000';
+const useMock = process.env.NODE_ENV === 'development';
 
-export const fetchRealTimeScore = async (params) => {
-  try {
-    const response = await axios.post(`${API_BASE_URL}/risk/score/realtime`, params);
-    return response.data;
-  } catch (error) {
-    console.error("Error fetching real-time score:", error);
-    throw error;
-  }
-};
-
-export const sendEventFeedback = async (params) => {
-  try {
-    const response = await axios.post(`${API_BASE_URL}/risk/feedback`, params);
-    return response.data;
-  } catch (error) {
-    console.error("Error sending event feedback:", error);
-    throw error;
-  }
-};
-
-export const fetchHistoryEvents = async (filters) => {
-  try {
-    // 开发环境使用模拟数据
-    if (process.env.NODE_ENV === 'development') {
-      const mockEvents = generateHistoryEvents(20);
-      // 应用过滤条件
-      let filteredEvents = mockEvents;
-      if (filters?.riskLevel) {
-        filteredEvents = filteredEvents.filter(e => e.risk_level === filters.riskLevel);
-      }
-      if (filters?.startDate && filters?.endDate) {
-        filteredEvents = filteredEvents.filter(e => {
-          const eventDate = new Date(e.timestamp);
-          const startDate = new Date(filters.startDate);
-          const endDate = new Date(filters.endDate);
-          return eventDate >= startDate && eventDate <= endDate;
-        });
-      }
-      return { events: filteredEvents };
-    }
-    // 生产环境调用实际 API
-    const response = await axios.post(`${API_BASE_URL}/history/events`, filters);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching events:', error);
-    throw error;
-  }
-};
-
-// 开发环境模拟策略数据存储
 let mockPoliciesStore = null;
+let mockHistoryStore = null;
 
-// 初始化模拟策略数据
 const initMockPolicies = () => {
   if (!mockPoliciesStore) {
-    mockPoliciesStore = generatePolicies(5);
+    mockPoliciesStore = generatePolicies(6);
   }
   return mockPoliciesStore;
 };
 
-export const fetchPolicies = async () => {
-  try {
-    // 开发环境使用模拟数据
-    if (process.env.NODE_ENV === 'development') {
-      initMockPolicies();
-      return { policies: mockPoliciesStore };
-    }
-    // 生产环境调用实际 API
-    const response = await axios.get(`${API_BASE_URL}/risk/policies`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching policies:', error);
-    throw error;
+const initMockHistory = () => {
+  if (!mockHistoryStore) {
+    mockHistoryStore = generateHistoryEvents(40);
   }
+  return mockHistoryStore;
+};
+
+const realDemoApi = axios.create({
+  baseURL: REAL_DEMO_API_BASE_URL,
+  timeout: 15000,
+});
+
+export const fetchRealtimeDashboard = async () => {
+  if (useMock) {
+    const assessments = generateRealTimeScores(18);
+    return {
+      assessments,
+      metrics: generateRealtimeMetrics(assessments),
+      refreshedAt: new Date().toISOString(),
+    };
+  }
+
+  const response = await axios.get(`${API_BASE_URL}/risk/dashboard/realtime`);
+  return response.data;
+};
+
+export const fetchHistoryEvents = async (filters = {}) => {
+  if (useMock) {
+    let events = [...initMockHistory()];
+
+    if (filters.riskLevel) {
+      events = events.filter((e) => e.risk_result.risk_level === filters.riskLevel || e.risk_level === filters.riskLevel);
+    }
+
+    if (filters.outcome) {
+      events = events.filter((e) => e.risk_result.outcome === filters.outcome);
+    }
+
+    if (filters.keyword) {
+      const keyword = filters.keyword.toLowerCase();
+      events = events.filter((e) =>
+        [e.event_id, e.user_id, e.trace_id, e.session_id, e.device_id, e.scene_id]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(keyword)),
+      );
+    }
+
+    if (filters.startDate && filters.endDate) {
+      const startDate = new Date(filters.startDate).getTime();
+      const endDate = new Date(filters.endDate).getTime() + 24 * 60 * 60 * 1000 - 1;
+      events = events.filter((e) => {
+        const eventTime = new Date(e.timestamp).getTime();
+        return eventTime >= startDate && eventTime <= endDate;
+      });
+    }
+
+    return { events };
+  }
+
+  const response = await axios.post(`${API_BASE_URL}/history/events`, filters);
+  return response.data;
+};
+
+export const validateIngestEvent = async (payload) => {
+  if (useMock) {
+    const result = validateEventEnvelope(payload);
+    return {
+      code: result.pass ? 0 : 1001,
+      message: result.pass ? 'ok' : 'validation_failed',
+      validation: result,
+    };
+  }
+
+  const response = await axios.post(`${API_BASE_URL}/risk/events/ingest`, payload);
+  return response.data;
+};
+
+export const sendEventFeedback = async (params) => {
+  if (useMock) {
+    return {
+      code: 0,
+      message: 'ok',
+      feedback: {
+        ...params,
+        submitted_at: new Date().toISOString(),
+      },
+    };
+  }
+
+  const response = await axios.post(`${API_BASE_URL}/risk/feedback`, params);
+  return response.data;
+};
+
+export const fetchPolicies = async () => {
+  if (useMock) {
+    return { policies: initMockPolicies() };
+  }
+
+  const response = await axios.get(`${API_BASE_URL}/risk/policies`);
+  return response.data;
 };
 
 export const addPolicy = async (policyData) => {
-  try {
-    // 开发环境使用模拟数据
-    if (process.env.NODE_ENV === 'development') {
-      initMockPolicies();
-      const newPolicy = {
-        ...policyData,
-        policy_id: `policy_${Date.now()}`,
-      };
-      mockPoliciesStore.push(newPolicy);
-      return { policy: newPolicy };
-    }
-    // 生产环境调用实际 API
-    const response = await axios.post(`${API_BASE_URL}/risk/policies`, policyData);
-    return response.data;
-  } catch (error) {
-    console.error('Error adding policy:', error);
-    throw error;
+  if (useMock) {
+    const policies = initMockPolicies();
+    const newPolicy = {
+      ...policyData,
+      policy_id: `policy_${Date.now()}`,
+      enabled: true,
+      strategy_version: policyData.strategy_version || 's1.new.0',
+    };
+    policies.unshift(newPolicy);
+    return { policy: newPolicy };
   }
+
+  const response = await axios.post(`${API_BASE_URL}/risk/policies`, policyData);
+  return response.data;
 };
 
 export const updatePolicy = async (policyId, policyData) => {
-  try {
-    // 开发环境使用模拟数据
-    if (process.env.NODE_ENV === 'development') {
-      initMockPolicies();
-      const index = mockPoliciesStore.findIndex(p => p.policy_id === policyId);
-      if (index !== -1) {
-        mockPoliciesStore[index] = { ...mockPoliciesStore[index], ...policyData };
-        return { policy: mockPoliciesStore[index] };
-      }
+  if (useMock) {
+    const policies = initMockPolicies();
+    const index = policies.findIndex((p) => p.policy_id === policyId);
+    if (index < 0) {
       throw new Error('Policy not found');
     }
-    // 生产环境调用实际 API
-    const response = await axios.put(`${API_BASE_URL}/risk/policies/${policyId}`, policyData);
-    return response.data;
-  } catch (error) {
-    console.error('Error updating policy:', error);
-    throw error;
+    policies[index] = { ...policies[index], ...policyData };
+    return { policy: policies[index] };
   }
+
+  const response = await axios.put(`${API_BASE_URL}/risk/policies/${policyId}`, policyData);
+  return response.data;
 };
 
 export const deletePolicy = async (policyId) => {
-  try {
-    // 开发环境使用模拟数据
-    if (process.env.NODE_ENV === 'development') {
-      initMockPolicies();
-      mockPoliciesStore = mockPoliciesStore.filter(p => p.policy_id !== policyId);
-      return { success: true };
-    }
-    // 生产环境调用实际 API
-    const response = await axios.delete(`${API_BASE_URL}/risk/policies/${policyId}`);
-    return response.data;
-  } catch (error) {
-    console.error('Error deleting policy:', error);
-    throw error;
+  if (useMock) {
+    const policies = initMockPolicies();
+    mockPoliciesStore = policies.filter((p) => p.policy_id !== policyId);
+    return { success: true };
   }
+
+  const response = await axios.delete(`${API_BASE_URL}/risk/policies/${policyId}`);
+  return response.data;
 };
+
+export const fetchUserProfile = async (userId) => {
+  if (useMock) {
+    return generateUserProfile(userId);
+  }
+
+  const { data } = await realDemoApi.get(`/risk/profile/${userId}`);
+  return data;
+};
+
+export const fetchProfile = fetchUserProfile;

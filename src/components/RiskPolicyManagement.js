@@ -1,211 +1,158 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message } from 'antd';
-import { fetchPolicies, addPolicy, updatePolicy, deletePolicy } from '../api/api';
-
-const { Option } = Select;
+import React, { useEffect, useState } from 'react';
+import {
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  message,
+} from 'antd';
+import { addPolicy, deletePolicy, fetchPolicies, updatePolicy } from '../api/api';
 
 const RiskPolicyManagement = () => {
   const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [policyForm] = Form.useForm(); // 使用 useForm 创建表单实例
-  const [selectedPolicy, setSelectedPolicy] = useState(null);
+  const [editingPolicy, setEditingPolicy] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [form] = Form.useForm();
 
-  useEffect(() => {
-    const fetchRiskPolicies = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchPolicies();
-        setPolicies(data.policies);
-      } catch (error) {
-        message.error('Failed to fetch policies');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRiskPolicies();
-  }, []);
-
-  // 监听 isModalVisible 状态变化
-  useEffect(() => {
-    console.log('【DEBUG】isModalVisible changed:', isModalVisible);
-  }, [isModalVisible]);
-
-  const handleAddPolicy = () => {
-    console.log('【DEBUG】handleAddPolicy called');
-    policyForm.resetFields();
-    console.log('1111');
-    setSelectedPolicy(null);
-    console.log('2222');
-    setIsModalVisible(true);  // 打开弹窗
-    console.log('3333');
-  };
-
-  const handleEditPolicy = (policy) => {
-    console.log('【DEBUG】handleEditPolicy called with:', policy);
-    if (!policy) {
-      console.error('【ERROR】No policy data provided for editing');
-      message.error('无法编辑：未提供策略数据');
-      return;
-    }
-    
-    if (!policy.policy_id) {
-      console.error('【ERROR】Policy data missing policy_id:', policy);
-      message.error('策略数据不完整，无法编辑');
-      return;
-    }
-    
-    policyForm.setFieldsValue(policy);
-    setSelectedPolicy(policy);
-    setIsModalVisible(true);  // 打开弹窗
-  };
-
-  const handleDeletePolicy = async (policyId) => {
+  const loadPolicies = async () => {
     setLoading(true);
     try {
-      await deletePolicy(policyId);
-      message.success('策略删除成功');
-      if (selectedPolicy && selectedPolicy.policy_id === policyId) {
-        setSelectedPolicy(null);
-        policyForm.resetFields();
-      }
       const data = await fetchPolicies();
-      setPolicies(data.policies);
+      setPolicies(data.policies || []);
     } catch (error) {
-      message.error('删除策略失败');
-      console.error('Delete policy error:', error);
+      message.error('获取策略失败');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleModalCancel = () => {
-    console.log('【DEBUG】Modal cancelled');
-    setIsModalVisible(false);
-    setSelectedPolicy(null); // 确保selectedPolicy重置
+  useEffect(() => {
+    loadPolicies();
+  }, []);
+
+  const openCreate = () => {
+    setEditingPolicy(null);
+    form.resetFields();
+    form.setFieldsValue({ enabled: true, risk_level: 'MEDIUM', decision: 'CHALLENGE', threshold: 0.65, scene_id: 'login' });
+    setOpen(true);
   };
 
-  const handleModalOk = async () => {
+  const openEdit = (record) => {
+    setEditingPolicy(record);
+    form.setFieldsValue(record);
+    setOpen(true);
+  };
+
+  const handleSave = async () => {
+    const values = await form.validateFields();
+    setLoading(true);
     try {
-      console.log('【DEBUG】handleModalOk called');
-      const values = await policyForm.validateFields();
-      console.log('【DEBUG】Form values:', values);
-      
-      if (selectedPolicy && !selectedPolicy.policy_id) {
-        console.error('【ERROR】Selected policy is missing policy_id:', selectedPolicy);
-        message.error('选中的策略ID无效，无法更新');
-        return;
-      }
-      
-      setLoading(true);
-      if (selectedPolicy) {
-        console.log('【DEBUG】Updating policy:', selectedPolicy.policy_id);
-        await updatePolicy(selectedPolicy.policy_id, values);
+      if (editingPolicy) {
+        await updatePolicy(editingPolicy.policy_id, values);
         message.success('策略更新成功');
       } else {
-        console.log('【DEBUG】Adding new policy');
         await addPolicy(values);
-        message.success('策略添加成功');
+        message.success('策略新增成功');
       }
-      
-      setIsModalVisible(false);
-      setSelectedPolicy(null);
-      const data = await fetchPolicies();
-      setPolicies(data.policies);
-      policyForm.resetFields();
+      setOpen(false);
+      setEditingPolicy(null);
+      form.resetFields();
+      await loadPolicies();
     } catch (error) {
-      console.error('【ERROR】Save policy error:', error);
-      message.error(`保存策略失败: ${error.message || '未知错误'}`);
+      message.error('保存策略失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (policyId) => {
+    setLoading(true);
+    try {
+      await deletePolicy(policyId);
+      message.success('策略删除成功');
+      await loadPolicies();
+    } catch (error) {
+      message.error('删除策略失败');
     } finally {
       setLoading(false);
     }
   };
 
   const columns = [
-    {
-      title: '策略 ID',
-      dataIndex: 'policy_id',
-      key: 'policy_id',
-    },
-    {
-      title: '策略名称',
-      dataIndex: 'policy_name',
-      key: 'policy_name',
-    },
-    {
-      title: '风险等级',
-      dataIndex: 'risk_level',
-      key: 'risk_level',
-      render: (level) => {
-        const levelMap = { LOW: '低', MEDIUM: '中', HIGH: '高' };
-        return levelMap[level] || level;
-      }
-    },
-    {
-      title: '阈值',
-      dataIndex: 'threshold',
-      key: 'threshold',
-    },
+    { title: '策略 ID', dataIndex: 'policy_id', key: 'policy_id', width: 120 },
+    { title: '策略名称', dataIndex: 'policy_name', key: 'policy_name', width: 220 },
+    { title: '场景', dataIndex: 'scene_id', key: 'scene_id', render: (value) => <Tag>{value}</Tag> },
+    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', render: (value) => <Tag color={value === 'HIGH' ? 'red' : value === 'MEDIUM' ? 'orange' : 'green'}>{value}</Tag> },
+    { title: '处置动作', dataIndex: 'decision', key: 'decision' },
+    { title: '阈值', dataIndex: 'threshold', key: 'threshold' },
+    { title: '版本', dataIndex: 'strategy_version', key: 'strategy_version' },
+    { title: '状态', dataIndex: 'enabled', key: 'enabled', render: (value) => <Tag color={value ? 'green' : 'default'}>{value ? '启用' : '停用'}</Tag> },
     {
       title: '操作',
       key: 'action',
       render: (_, record) => (
-        <span>
-          <Button onClick={() => handleEditPolicy(record)} type="link">编辑</Button>
-          <Button onClick={() => handleDeletePolicy(record.policy_id)} type="link" danger>
-            删除
-          </Button>
-        </span>
+        <Space>
+          <Button type="link" onClick={() => openEdit(record)}>编辑</Button>
+          <Popconfirm title="确认删除该策略？" onConfirm={() => handleDelete(record.policy_id)}>
+            <Button type="link" danger>删除</Button>
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
 
   return (
-    <div>
-      <Button 
-        onClick={handleAddPolicy} 
-        type="primary" 
-        style={{ marginBottom: '16px' }}
-      >
-        添加策略
-      </Button>
-      <Table
-        columns={columns}
-        dataSource={policies}
-        loading={loading}
-        rowKey="policy_id"
-        pagination={{ pageSize: 10 }}
-      />
+    <>
+      <Space style={{ marginBottom: 16 }}>
+        <Button type="primary" onClick={openCreate}>新增策略</Button>
+        <Button onClick={loadPolicies}>刷新</Button>
+      </Space>
+      <Table rowKey="policy_id" columns={columns} dataSource={policies} loading={loading} pagination={{ pageSize: 8 }} scroll={{ x: 1100 }} />
 
       <Modal
-        title={selectedPolicy ? '编辑策略' : '添加策略'}
-        open={isModalVisible}  // 修改：visible -> open (适配 Ant Design v4.24.0+)
-        onOk={handleModalOk}
-        onCancel={handleModalCancel}
+        title={editingPolicy ? '编辑策略' : '新增策略'}
+        open={open}
+        onCancel={() => setOpen(false)}
+        onOk={handleSave}
         confirmLoading={loading}
-        style={{ zIndex: 1000 }}
-        key={selectedPolicy ? `edit-${selectedPolicy.policy_id}` : 'add-new'}
+        destroyOnClose
       >
-        <Form 
-          form={policyForm} 
-          layout="vertical"
-        >
-          <Form.Item name="policy_name" label="策略名称" rules={[{ required: true }]}>
+        <Form form={form} layout="vertical">
+          <Form.Item name="policy_name" label="策略名称" rules={[{ required: true, message: '请输入策略名称' }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="risk_level" label="风险等级" rules={[{ required: true }]}>
-            <Select>
-              <Option value="LOW">低</Option>
-              <Option value="MEDIUM">中</Option>
-              <Option value="HIGH">高</Option>
-            </Select>
+          <Form.Item name="description" label="策略说明">
+            <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item name="threshold" label="阈值" rules={[{ required: true }]}>
-            <Input type="number" />
+          <Form.Item name="scene_id" label="适用场景" rules={[{ required: true }]}>
+            <Select options={[{ label: 'login', value: 'login' }, { label: 'payment', value: 'payment' }, { label: 'bind_card', value: 'bind_card' }]} />
+          </Form.Item>
+          <Form.Item name="risk_level" label="风险等级" rules={[{ required: true }]}>
+            <Select options={[{ label: 'LOW', value: 'LOW' }, { label: 'MEDIUM', value: 'MEDIUM' }, { label: 'HIGH', value: 'HIGH' }]} />
+          </Form.Item>
+          <Form.Item name="decision" label="处置动作" rules={[{ required: true }]}>
+            <Select options={[{ label: 'PASS', value: 'PASS' }, { label: 'CHALLENGE', value: 'CHALLENGE' }, { label: 'REJECT', value: 'REJECT' }]} />
+          </Form.Item>
+          <Form.Item name="threshold" label="触发阈值" rules={[{ required: true }]}>
+            <InputNumber min={0} max={1} step={0.01} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="strategy_version" label="策略版本" rules={[{ required: true, message: '请输入版本号' }]}>
+            <Input placeholder="如 s1.2.0" />
+          </Form.Item>
+          <Form.Item name="enabled" label="启用状态" valuePropName="checked">
+            <Switch />
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </>
   );
 };
 
