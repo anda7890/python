@@ -10,6 +10,7 @@ In the project directory, you can run:
 ##依赖安装
 npm install
 
+
 ### 后端启动
 启动backend目录的start_backend.bat
 
