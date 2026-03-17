@@ -5,6 +5,17 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 ## Available Scripts
 
 In the project directory, you can run:
+##依赖安装
+npm install
+
+
+### 后端启动
+启动backend目录的start_backend.bat
+
+或者
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+
 
 ### `npm start`
 
