@@ -1,0 +1,38 @@
+/* 简洁好看的登录界面样式 */
+.login-container {
+  text-align: center;
+  margin-top: 50px;
+}
+
+.login-container .ant-result-title {
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.login-container .ant-btn-primary {
+  width: 150px;
+  margin-top: 16px;
+}
+
+.login-modal {
+  max-width: 400px;
+  padding: 24px;
+}
+
+.login-modal .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.login-modal .ant-btn-primary {
+  width: 100%;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 16px; /* 确保元素之间有适当间距 */
+}
+
+.header .user-info span {
+  white-space: nowrap; /* 防止文本换行 */
+}
